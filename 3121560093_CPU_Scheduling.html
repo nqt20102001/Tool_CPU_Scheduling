@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Scheduling Algorithms</title>
+    <link rel="stylesheet" type="text/css">
+    <script src="test.js" defer></script>
+    <style>
+        /* Đặt nền và kiểu chữ cho trang */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f7f9fc;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* Container chính để căn giữa nội dung */
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        /* Tiêu đề */
+        h1 {
+            text-align: center;
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        /* Label và select trong phần chọn thuật toán */
+        label {
+            display: block;
+            font-size: 16px;
+            color: #444;
+            margin-top: 20px;
+            margin-bottom: 5px;
+        }
+
+        select, input {
+            width: 20%;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #algorithm {
+            width: 30%;
+        }
+        /* Tùy chọn số process và Time Quantum */
+        #process-input {
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #a70000;
+        }
+
+        #results {
+            margin-top: 30px;
+        }
+
+        #averageWaitingTime, #averageTurnaroundTime {
+            font-size: 18px;
+            margin-top: 10px;
+            color: #333;
+            text-align: center;
+        }
+
+        #ganttChartContainer {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #ganttChart {
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CPU Scheduling Algorithms</h1>
+
+        <label for="algorithm">Choose Algorithm:</label>
+        <select id="algorithm">
+            <option value="1">FCFS</option>
+            <option value="2">SJF</option>
+            <option value="3">SRTF</option>
+            <option value="4">Priority Scheduling</option>
+            <option value="5">Round Robin</option>
+        </select>
+
+        <div id="process-input">
+            <label for="numProcesses">Enter Number of Processes:</label>
+            <input type="number" id="numProcesses" min="1" />
+
+            <div id="timeQuantumInput" style="display: none; margin-top: 10px;">
+                <label for="timeQuantum">Enter Time Quantum:</label>
+                <input type="number" id="timeQuantum" min="1" />
+            </div>
+
+            <table id="processTable">
+                <thead>
+                    <tr>
+                        <th>Process</th>
+                        <th>Arrival Time</th>
+                        <th>Service Time</th>
+                        <th class="priority-column" style="display: none;">Priority</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <button id="solveButton">Solve</button>
+
+            <div id="results">
+                <h2 style="text-align: center;">Results</h2>
+                <table id="resultTable">
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>Arrival</th>
+                            <th>Service</th>
+                            <th>Start</th>
+                            <th>Finish</th>
+                            <th>Wait</th>
+                            <th>Turnaround</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                <p id="averageWaitingTime"></p>
+                <p id="averageTurnaroundTime"></p>
+            </div>
+            <div id="ganttChartContainer">
+                <h2>Gantt Chart</h2>
+                <canvas id="ganttChart"></canvas>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const algorithmSelect = document.getElementById('algorithm');
+        const numProcessesInput = document.getElementById('numProcesses');
+        const processTableBody = document.querySelector('#processTable tbody');
+        const solveButton = document.getElementById('solveButton');
+        const timeQuantumInput = document.getElementById('timeQuantumInput');
+        const priorityColumn = document.querySelector('.priority-column');
+        const resultTableBody = document.querySelector('#resultTable tbody');
+        const avgWaitTimeText = document.getElementById('averageWaitingTime');
+        const avgTurnTimeText = document.getElementById('averageTurnaroundTime');
+
+        algorithmSelect.addEventListener('change', handleAlgorithmChange);
+        numProcessesInput.addEventListener('input', generateProcessInputs);
+        solveButton.addEventListener('click', solve);
+
+        function handleAlgorithmChange() {
+            const algorithm = parseInt(algorithmSelect.value);
+            priorityColumn.style.display = (algorithm === 4) ? '' : 'none';
+            timeQuantumInput.style.display = (algorithm === 5) ? '' : 'none';
+            generateProcessInputs();
+        }
+
+        function generateProcessInputs() {
+            const numProcesses = parseInt(numProcessesInput.value) || 0;
+            processTableBody.innerHTML = '';
+
+            for (let i = 0; i < numProcesses; i++) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>P${i + 1}</td>
+                    <td><input type="number" class="arrival-time" min="0" /></td>
+                    <td><input type="number" class="service-time" min="1" /></td>
+                    <td class="priority-column" style="display: ${priorityColumn.style.display};">
+                        <input type="number" class="priority" min="1" />
+                    </td>
+                `;
+                processTableBody.appendChild(row);
+
+            }
+        }
+
+        function solve() {
+            const algorithm = parseInt(algorithmSelect.value);
+            const timeQuantum = parseInt(document.getElementById('timeQuantum').value) || 0;
+        
+            const processes = Array.from(processTableBody.querySelectorAll('tr')).map(row => ({
+                arrivalTime: parseInt(row.querySelector('.arrival-time').value) || 0,
+                serviceTime: parseInt(row.querySelector('.service-time').value) || 1,
+                priority: parseInt(row.querySelector('.priority')?.value) || 0
+            }));
+        
+            let result;
+            switch (algorithm) {
+                case 1:
+                    result = FCFS(processes);
+                    break;
+                case 2:
+                    result = SJF(processes);
+                    break;
+                case 3:
+                    result = SRTF(processes);
+                    break;
+                case 4:
+                    result = PriorityScheduling(processes);
+                    break;
+                case 5:
+                    result = RoundRobin(processes, timeQuantum);
+                    break;
+                default:
+                    return;
+            }
+        
+            displayResults(result);
+        }
+        
+        function displayResults(result) {
+            const { executionLog, finishTimes, processes, start, finish, wait, turn, avgWait, avgTurn } = result;
+        
+            if (executionLog) {
+                // Trường hợp thuật toán Round Robin
+                resultTableBody.innerHTML = executionLog.map((log, index) => `
+                    <tr>
+                        <td>${log.process}</td>
+                        <td>${log.start}</td>
+                        <td>${log.end - log.start}</td>
+                        <td>${log.start}</td>
+                        <td>${log.end}</td>
+                        <td>-</td> <!-- Round Robin không cần thời gian chờ từng lần -->
+                        <td>-</td> <!-- Round Robin không cần thời gian hoàn thành từng lần -->
+                    </tr>
+                `).join('');
+                avgWaitTimeText.textContent = `Average Waiting Time: ${avgWait.toFixed(6)}`;
+                drawGanttChart(executionLog, true); // Vẽ biểu đồ Gantt cho Round Robin
+            } else {
+                // Trường hợp các thuật toán khác
+                resultTableBody.innerHTML = processes.map((p, i) => `
+                    <tr>
+                        <td>P${i + 1}</td>
+                        <td>${p.arrivalTime}</td>
+                        <td>${p.serviceTime}</td>
+                        <td>${start[i]}</td>
+                        <td>${finish[i]}</td>
+                        <td>${wait[i]}</td>
+                        <td>${turn[i]}</td>
+                    </tr>
+                `).join('');
+                avgWaitTimeText.textContent = `Average Waiting Time: ${avgWait.toFixed(6)}`;
+                avgTurnTimeText.textContent = `Average Turnaround Time: ${avgTurn.toFixed(6)}`;
+                drawGanttChart({ processes, start, finish }, false); // Vẽ biểu đồ Gantt cho các thuật toán khác
+            }
+        }
+
+        function FCFS(processes) {
+            processes.sort((a, b) => a.arrivalTime - b.arrivalTime); // Sắp xếp theo thời gian đến
+
+            let n = processes.length;
+            let start = Array(n).fill(0), finish = Array(n).fill(0);
+            let wait = Array(n).fill(0), turn = Array(n).fill(0);
+            let currentTime = 0;
+
+            // Tính toán thời gian bắt đầu, kết thúc, chờ và hoàn thành cho từng tiến trình
+            for (let i = 0; i < n; i++) {
+                start[i] = Math.max(currentTime, processes[i].arrivalTime);
+                finish[i] = start[i] + processes[i].serviceTime;
+                wait[i] = start[i] - processes[i].arrivalTime;
+                turn[i] = finish[i] - processes[i].arrivalTime;
+                currentTime = finish[i];
+            }
+
+            return generateResult(processes, start, finish, wait, turn);
+        }
+
+        function SJF(processes) {
+            let n = processes.length;
+            let currentTime = 0, completed = 0;
+            let visited = Array(n).fill(false);
+            let start = Array(n).fill(0), finish = Array(n).fill(0);
+            let wait = Array(n).fill(0), turn = Array(n).fill(0);
+
+            while (completed < n) {
+                let availableProcesses = processes
+                    .map((p, i) => ({ ...p, index: i }))
+                    .filter(p => p.arrivalTime <= currentTime && !visited[p.index]);
+
+                if (availableProcesses.length > 0) {
+                    let shortestJob = availableProcesses.reduce((a, b) =>
+                        a.serviceTime < b.serviceTime ? a : b
+                    );
+
+                    let i = shortestJob.index;
+                    start[i] = currentTime;
+                    finish[i] = start[i] + processes[i].serviceTime;
+                    wait[i] = start[i] - processes[i].arrivalTime;
+                    turn[i] = finish[i] - processes[i].arrivalTime;
+
+                    currentTime = finish[i];
+                    visited[i] = true;
+                    completed++;
+                } else {
+                    currentTime++; // Tăng thời gian nếu không có tiến trình nào sẵn sàng
+                }
+            }
+
+            return generateResult(processes, start, finish, wait, turn);
+        }
+
+        // function SRTF(processes) {
+        //     let n = processes.length;
+        //     let remainingTime = processes.map(p => p.serviceTime); // Thời gian còn lại của mỗi tiến trình
+        //     let currentTime = 0, completed = 0;
+        //     let executionLog = [];
+        //     let waitTime = Array(n).fill(0); // Thời gian chờ của từng tiến trình
+        //     let lastExecutedTime = Array(n).fill(0); // Thời điểm thực thi lần cuối
+        //     let responseTime = Array(n).fill(-1); // Thời điểm lần đầu tiên tiến trình được thực thi
+
+        //     while (completed < n) {
+        //         // Tìm các tiến trình đã đến và chưa hoàn thành
+        //         let availableProcesses = processes
+        //             .map((p, i) => ({ ...p, index: i }))
+        //             .filter(p => p.arrivalTime <= currentTime && remainingTime[p.index] > 0);
+
+        //         if (availableProcesses.length > 0) {
+        //             // Chọn tiến trình có thời gian còn lại ngắn nhất
+        //             let shortestProcess = availableProcesses.reduce((a, b) =>
+        //                 remainingTime[a.index] < remainingTime[b.index] ? a : b
+        //             );
+
+        //             let i = shortestProcess.index;
+
+        //             // Ghi lại thời gian phản hồi nếu đây là lần đầu tiên thực thi
+        //             if (responseTime[i] === -1) {
+        //                 responseTime[i] = currentTime;
+        //             }
+
+        //             // Tính thời gian chờ trước lần thực thi này
+        //             waitTime[i] += currentTime - lastExecutedTime[i];
+
+        //             // Thực thi tiến trình trong 1 đơn vị thời gian
+        //             executionLog.push({ process: `P${i + 1}`, start: currentTime, end: currentTime + 1 });
+
+        //             currentTime++;
+        //             remainingTime[i]--;
+
+        //             // Nếu tiến trình hoàn thành
+        //             if (remainingTime[i] === 0) {
+        //                 completed++;
+        //             }
+
+        //             // Cập nhật thời gian thực thi lần cuối
+        //             lastExecutedTime[i] = currentTime;
+        //         } else {
+        //             currentTime++; // Nếu không có tiến trình nào sẵn sàng, tăng thời gian
+        //         }
+        //     }
+
+        //     // Điều chỉnh thời gian chờ bằng cách loại bỏ thời gian đến ban đầu
+        //     for (let i = 0; i < n; i++) {
+        //         waitTime[i] -= processes[i].arrivalTime;
+        //     }
+
+        //     console.log(waitTime); // Kiểm tra thời gian chờ từng tiến trình
+
+        //     return { executionLog, avgWait: avg(waitTime) };
+        // }
+        
+        function SRTF(processes) {
+            let n = processes.length;
+            let remainingTime = processes.map(p => p.serviceTime); // Thời gian còn lại của mỗi tiến trình
+            let currentTime = 0, completed = 0;
+            let executionLog = [];
+            let waitTime = Array(n).fill(0);
+            let lastExecutedTime = Array(n).fill(0);
+            let responseTime = Array(n).fill(-1);
+
+            while (completed < n) {
+                let availableProcesses = processes
+                    .map((p, i) => ({ ...p, index: i }))
+                    .filter(p => p.arrivalTime <= currentTime && remainingTime[p.index] > 0);
+
+                if (availableProcesses.length > 0) {
+                    let shortestProcess = availableProcesses.reduce((a, b) =>
+                        remainingTime[a.index] < remainingTime[b.index] ? a : b
+                    );
+
+                    let i = shortestProcess.index;
+
+                    if (responseTime[i] === -1) {
+                        responseTime[i] = currentTime;
+                    }
+
+                    waitTime[i] += currentTime - lastExecutedTime[i];
+
+                    // Nếu tiến trình đang thực thi liên tục, chỉ cập nhật thời gian kết thúc
+                    if (
+                        executionLog.length > 0 &&
+                        executionLog[executionLog.length - 1].process === `P${i + 1}`
+                    ) {
+                        executionLog[executionLog.length - 1].end++;
+                    } else {
+                        // Nếu không, thêm log mới
+                        executionLog.push({ process: `P${i + 1}`, start: currentTime, end: currentTime + 1 });
+                    }
+
+                    currentTime++;
+                    remainingTime[i]--;
+
+                    if (remainingTime[i] === 0) {
+                        completed++;
+                    }
+
+                    lastExecutedTime[i] = currentTime;
+                } else {
+                    currentTime++; // Nếu không có tiến trình sẵn sàng, tăng thời gian
+                }
+            }
+
+            for (let i = 0; i < n; i++) {
+                waitTime[i] -= processes[i].arrivalTime;
+            }
+
+            console.log(waitTime); // Kiểm tra thời gian chờ
+
+            return { executionLog, avgWait: avg(waitTime) };
+        }
+
+
+        function generateResult(processes, start, finish, wait, turn) {
+            return {
+                processes,
+                start,
+                finish,
+                wait,
+                turn,
+                avgWait: avg(wait),
+                avgTurn: avg(turn)
+            };
+        }
+
+        function PriorityScheduling(processes) {
+            let n = processes.length;
+            let remainingTime = processes.map(p => p.serviceTime); // Thời gian còn lại của mỗi tiến trình
+            let currentTime = 0, completed = 0;
+            let executionLog = [];
+            let waitTime = Array(n).fill(0); // Lưu thời gian chờ của từng tiến trình
+            let lastExecutedTime = Array(n).fill(0); // Lưu thời điểm thực thi cuối cùng
+            let firstArrivalTime = processes.map(p => p.arrivalTime); // Lưu thời gian đến đầu tiên
+            let responseTime = Array(n).fill(-1); // Ghi nhận lần đầu thực thi của mỗi tiến trình
+
+            while (completed < n) {
+                let availableProcesses = processes
+                    .map((p, i) => ({ ...p, index: i }))
+                    .filter(p => p.arrivalTime <= currentTime && remainingTime[p.index] > 0);
+
+                if (availableProcesses.length > 0) {
+                    let highestPriorityProcess = availableProcesses.reduce((a, b) =>
+                        a.priority < b.priority ? a : b
+                    );
+
+                    let i = highestPriorityProcess.index;
+
+                    // Ghi nhận thời gian phản hồi nếu đây là lần thực thi đầu tiên
+                    if (responseTime[i] === -1) {
+                        responseTime[i] = currentTime;
+                    }
+
+                    // Tích lũy thời gian chờ cho tiến trình i
+                    waitTime[i] += currentTime - lastExecutedTime[i];
+
+                    // Cập nhật log thực thi
+                    if (executionLog.length > 0 && executionLog[executionLog.length - 1].process === `P${i + 1}`) {
+                        executionLog[executionLog.length - 1].end = currentTime + 1;
+                    } else {
+                        executionLog.push({ process: `P${i + 1}`, start: currentTime, end: currentTime + 1 });
+                    }
+
+                    remainingTime[i]--;
+                    lastExecutedTime[i] = currentTime + 1;
+                    currentTime++;
+
+                    if (remainingTime[i] === 0) {
+                        completed++;
+                    }
+                } else {
+                    currentTime++; // Nếu không có tiến trình nào sẵn sàng, tăng thời gian
+                }
+            }
+
+            // Điều chỉnh thời gian chờ: loại bỏ thời gian đến ban đầu
+            for (let i = 0; i < n; i++) {
+                waitTime[i] -= processes[i].arrivalTime;
+            }
+
+            console.log(waitTime); // Kiểm tra thời gian chờ từng tiến trình
+
+            return { executionLog, avgWait: avg(waitTime) };
+        }
+        
+        function RoundRobin(processes, quantum) {
+            let n = processes.length;
+            let remaining = processes.map(p => p.serviceTime); // Thời gian còn lại của mỗi tiến trình
+            let currentTime = 0, completed = 0;
+            let executionLog = [];
+            let waitTime = Array(n).fill(0); // Lưu thời gian chờ của từng tiến trình
+            let lastExecutedTime = Array(n).fill(0); // Lưu thời điểm tiến trình được thực thi lần cuối
+            let firstArrivalTime = processes.map(p => p.arrivalTime); // Lưu thời gian đến đầu tiên của mỗi tiến trình
+            let responseTime = Array(n).fill(-1); // Lưu thời điểm bắt đầu thực thi lần đầu (để tính chính xác thời gian chờ)
+
+            while (completed < n) {
+                let done = true;
+
+                for (let i = 0; i < n; i++) {
+                    if (remaining[i] > 0 && processes[i].arrivalTime <= currentTime) {
+                        // Ghi lại thời gian phản hồi (lần đầu tiên được thực thi)
+                        if (responseTime[i] === -1) {
+                            responseTime[i] = currentTime;
+                        }
+
+                        // Tính thời gian chờ: tổng thời gian chờ trước lần thực thi hiện tại
+                        waitTime[i] += currentTime - lastExecutedTime[i];
+
+                        // Thực hiện tiến trình trong quantum hoặc ít hơn nếu thời gian còn lại nhỏ hơn quantum
+                        let timeSpent = Math.min(quantum, remaining[i]);
+                        executionLog.push({ process: `P${i + 1}`, start: currentTime, end: currentTime + timeSpent });
+
+                        currentTime += timeSpent;
+                        remaining[i] -= timeSpent;
+
+                        if (remaining[i] === 0) {
+                            completed++; // Đánh dấu tiến trình đã hoàn thành
+                        }
+
+                        lastExecutedTime[i] = currentTime; // Cập nhật thời gian thực thi lần cuối
+                        done = false;
+                    }
+                }
+
+                if (done) currentTime++; // Nếu không có tiến trình nào sẵn sàng, tăng thời gian
+            }
+
+            // Điều chỉnh thời gian chờ: loại bỏ thời gian đến ban đầu
+            for (let i = 0; i < n; i++) {
+                waitTime[i] -= processes[i].arrivalTime;
+            }
+
+            console.log(waitTime); // Kiểm tra thời gian chờ từng tiến trình
+
+            return { executionLog, avgWait: avg(waitTime) };
+        }
+        
+        function avg(arr) {
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+        }
+
+        // function drawGanttChart(data, isPreemptive = false) {
+        //     const canvas = document.getElementById('ganttChart');
+        //     const ctx = canvas.getContext('2d');
+        //     const canvasWidth = 800;
+        //     const barHeight = 30;
+        //     const margin = 10;
+        
+        //     ctx.clearRect(0, 0, canvasWidth, canvas.height); // Xóa canvas
+        
+        //     let totalTime;
+        
+        //     // Xử lý dữ liệu cho từng loại thuật toán
+        //     if (Array.isArray(data)) {
+        //         // Dữ liệu dạng log (Round Robin và Priority Scheduling preemptive)
+        //         totalTime = Math.max(...data.map(log => log.end));
+        //     } else {
+        //         // Dữ liệu từ FCFS hoặc SJF (với start và finish cho mỗi tiến trình)
+        //         const { processes, start, finish } = data;
+        //         totalTime = Math.max(...finish);
+        
+        //         // Chuyển đổi dữ liệu sang dạng log để dễ vẽ biểu đồ Gantt
+        //         data = processes.map((p, i) => ({
+        //             process: `P${i + 1}`,
+        //             start: start[i],
+        //             end: finish[i]
+        //         }));
+        //     }
+        
+        //     // Cài đặt kích thước canvas
+        //     canvas.width = canvasWidth;
+        //     canvas.height = barHeight + margin * 2;
+        
+        //     const colors = generateColors(data.length); // Màu sắc cho từng lần thực thi hoặc tiến trình
+        
+        //     // Vẽ từng đoạn trong biểu đồ Gantt
+        //     data.forEach((log, index) => {
+        //         const x = (log.start / totalTime) * canvasWidth;
+        //         const width = ((log.end - log.start) / totalTime) * canvasWidth;
+        
+        //         ctx.fillStyle = colors[index % colors.length];
+        //         ctx.fillRect(x, margin, width, barHeight);
+        
+        //         ctx.fillStyle = '#fff';
+        //         ctx.font = '16px Poppins';
+        //         ctx.fillText(log.process, x + width / 2 - 10, margin + barHeight / 2 + 5);
+        //     });
+        
+        //     drawTimeline(totalTime, canvas, ctx);
+        // }
+
+        // function drawTimeline(totalTime, canvas, ctx) {
+        //     ctx.fillStyle = '#000';
+        //     ctx.font = '14px Poppins';
+        //     for (let t = 0; t <= totalTime; t++) {
+        //         const posX = (t / totalTime) * canvas.width;
+        //         ctx.fillText(t, posX, canvas.height - 5);
+        //     }
+        // }
+        
+
+        function drawGanttChart(data, isPreemptive = false) {
+            const canvas = document.getElementById('ganttChart');
+            const ctx = canvas.getContext('2d');
+            const canvasWidth = 800;
+            const barHeight = 30;
+            const margin = 10;
+
+            ctx.clearRect(0, 0, canvasWidth, canvas.height); // Xóa canvas
+
+            let totalTime;
+            let ganttData;
+
+            // Kiểm tra xem dữ liệu đầu vào là log hay start/finish
+            if (Array.isArray(data)) {
+                ganttData = mergeContinuousProcesses(data); // Gộp các đoạn liên tục nếu cần
+                totalTime = Math.max(...ganttData.map(log => log.end));
+            } else {
+                const { processes, start, finish } = data;
+                totalTime = Math.max(...finish);
+                ganttData = processes.map((p, i) => ({
+                    process: `P${i + 1}`,
+                    start: start[i],
+                    end: finish[i]
+                }));
+            }
+
+            // Cài đặt kích thước canvas
+            canvas.width = canvasWidth;
+            canvas.height = barHeight + margin * 2;
+
+            const colors = generateColors(ganttData.length); // Sinh màu sắc cho các tiến trình
+
+            // Vẽ từng đoạn trên biểu đồ Gantt
+            ganttData.forEach((log, index) => {
+                const x = (log.start / totalTime) * canvasWidth;
+                const width = ((log.end - log.start) / totalTime) * canvasWidth;
+
+                ctx.fillStyle = colors[index % colors.length];
+                ctx.fillRect(x, margin, width, barHeight);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '16px Poppins';
+                ctx.fillText(log.process, x + width / 2 - 10, margin + barHeight / 2 + 5);
+            });
+
+            drawTimelineWithStartEnd(ganttData, totalTime, canvas, ctx);
+        }
+
+        function mergeContinuousProcesses(logs) {
+            const mergedLogs = [];
+
+            for (let i = 0; i < logs.length; i++) {
+                if (
+                    mergedLogs.length > 0 &&
+                    mergedLogs[mergedLogs.length - 1].process === logs[i].process &&
+                    mergedLogs[mergedLogs.length - 1].end === logs[i].start
+                ) {
+                    // Gộp các đoạn liên tục
+                    mergedLogs[mergedLogs.length - 1].end = logs[i].end;
+                } else {
+                    mergedLogs.push({ ...logs[i] });
+                }
+            }
+
+            return mergedLogs;
+        }
+
+        function drawTimelineWithStartEnd(data, totalTime, canvas, ctx) {
+            ctx.fillStyle = '#000';
+            ctx.font = '14px Poppins';
+
+            // Hiển thị chỉ thời gian bắt đầu và kết thúc của mỗi tiến trình
+            data.forEach((log) => {
+                const startX = (log.start / totalTime) * canvas.width;
+                const endX = (log.end / totalTime) * canvas.width;
+
+                ctx.fillText(log.start, startX, canvas.height - 5);
+                if (log.end !== log.start) {
+                    ctx.fillText(log.end, endX, canvas.height - 5);
+                }
+            });
+        }
+
+        function generateColors(num) {
+            const colors = [];
+            for (let i = 0; i < num; i++) {
+                const hue = Math.floor((360 / num) * i); // Chia đều dải màu sắc
+                colors.push(`hsl(${hue}, 70%, 50%)`); // Sử dụng hệ màu HSL để tạo màu sắc sinh động
+            }
+            return colors;
+        }
+    });
+</script>
